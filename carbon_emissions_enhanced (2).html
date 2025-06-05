@@ -1,0 +1,1400 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>碳排放数据可视化工具</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .debug-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border: 2px solid #e9ecef;
+        }
+        
+        .debug-log {
+            background: #2d3748;
+            color: #68d391;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        
+        .upload-section {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            text-align: center;
+            color: white;
+        }
+        
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+            margin: 20px;
+        }
+        
+        .file-input {
+            position: absolute;
+            left: -9999px;
+        }
+        
+        .file-input-button {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px dashed rgba(255, 255, 255, 0.5);
+            padding: 15px 30px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-block;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        .file-input-button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.8);
+            transform: translateY(-2px);
+        }
+        
+        .test-button {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+            font-weight: 600;
+            color: white;
+            margin: 10px;
+        }
+        
+        .test-button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.8);
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            color: white;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .chart-container {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+        
+        .chart-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #2c3e50;
+            text-align: center;
+        }
+        
+        .full-width {
+            grid-column: 1 / -1;
+        }
+        
+        .data-table {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
+            margin-top: 30px;
+        }
+        
+        .table-wrapper {
+            overflow-x: auto;
+            border-radius: 10px;
+            border: 1px solid #e0e0e0;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+        
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: 600;
+        }
+        
+        tr:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .export-section {
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px 0;
+            text-align: center;
+            color: white;
+        }
+        
+        .export-button {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            padding: 12px 25px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-block;
+            font-size: 16px;
+            font-weight: 600;
+            color: white;
+            text-decoration: none;
+            margin: 0 10px;
+        }
+        
+        .export-button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.8);
+            transform: translateY(-2px);
+        }
+        
+        .filter-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 25px;
+            border-radius: 15px;
+            margin: 20px 0;
+            color: white;
+        }
+        
+        .filter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .filter-group label {
+            margin-bottom: 5px;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        
+        .filter-group input, .filter-group select {
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.9);
+            font-size: 14px;
+        }
+        
+        .filter-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 15px;
+        }
+        
+        .filter-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+            font-weight: 600;
+            color: white;
+        }
+        
+        .filter-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: rgba(255, 255, 255, 0.8);
+        }
+        
+        .detailed-table {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
+            margin-top: 30px;
+        }
+        
+        .table-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .table-pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .pagination-btn {
+            background: #667eea;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        
+        .pagination-btn:hover:not(:disabled) {
+            background: #5a67d8;
+        }
+        
+        .pagination-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .pagination-info {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .detailed-table th {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            font-size: 12px;
+            padding: 8px 6px;
+        }
+        
+        .detailed-table td {
+            font-size: 12px;
+            padding: 8px 6px;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .detailed-table td:hover {
+            overflow: visible;
+            white-space: normal;
+            word-wrap: break-word;
+        }
+        
+        .error {
+            background: #ff6b6b;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        .success {
+            background: #51cf66;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        @media (max-width: 768px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .container {
+                padding: 20px;
+                margin: 10px;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+            
+            .filter-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌱 碳排放数据可视化分析</h1>
+        
+        <!-- 调试信息区域 -->
+        <div class="debug-section">
+            <h3>🔧 调试信息</h3>
+            <div class="debug-log" id="debugLog">等待操作...</div>
+            <button class="test-button" onclick="clearDebugLog()">清除日志</button>
+        </div>
+        
+        <div class="upload-section">
+            <h2>上传JSON文件</h2>
+            <p>请选择carbon_results_claude_4文件夹中的JSON文件</p>
+            <div class="file-input-wrapper">
+                <input type="file" id="fileInput" class="file-input" accept=".json" multiple>
+                <label for="fileInput" class="file-input-button">
+                    📁 选择文件
+                </label>
+            </div>
+            <br>
+            <button class="test-button" onclick="loadTestData()">🧪 加载测试数据</button>
+            <button class="test-button" onclick="testFileInput()">🔍 测试文件输入</button>
+            <div id="fileStatus"></div>
+        </div>
+        
+        <div id="content" style="display: none;">
+            <div class="export-section">
+                <h3>📊 导出数据</h3>
+                <p>将所有JSON数据导出为Excel表格</p>
+                <button class="export-button" onclick="exportToExcel()">
+                    📋 导出Excel表格
+                </button>
+            </div>
+            <div class="stats-grid" id="statsGrid"></div>
+            <div class="charts-grid" id="chartsGrid"></div>
+            <div class="data-table" id="dataTable"></div>
+            
+            <div class="filter-section">
+                <h3>🔍 数据筛选器</h3>
+                <div class="filter-grid">
+                    <div class="filter-group">
+                        <label>文件名</label>
+                        <select id="fileFilter">
+                            <option value="">全部文件</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>材料类型</label>
+                        <select id="typeFilter">
+                            <option value="">全部类型</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>材料名称</label>
+                        <input type="text" id="materialFilter" placeholder="搜索材料名称...">
+                    </div>
+                    <div class="filter-group">
+                        <label>最小排放量</label>
+                        <input type="number" id="minEmissionsFilter" placeholder="kgCO2e">
+                    </div>
+                    <div class="filter-group">
+                        <label>最大排放量</label>
+                        <input type="number" id="maxEmissionsFilter" placeholder="kgCO2e">
+                    </div>
+                    <div class="filter-group">
+                        <label>材料类别</label>
+                        <select id="categoryFilter">
+                            <option value="">全部类别</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="filter-buttons">
+                    <button class="filter-btn" onclick="applyFilters()">🔍 应用筛选</button>
+                    <button class="filter-btn" onclick="clearFilters()">🗑️ 清除筛选</button>
+                </div>
+            </div>
+            
+            <div class="detailed-table" id="detailedDataTable">
+                <div class="chart-title">📋 详细原始数据</div>
+                <div class="table-info">
+                    <span id="recordCount">共 0 条记录</span>
+                    <span>
+                        每页显示：
+                        <select id="pageSize" onchange="changePageSize()">
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                            <option value="200">200</option>
+                        </select>
+                    </span>
+                </div>
+                <div class="table-wrapper">
+                    <table id="detailsTable">
+                        <thead>
+                            <tr>
+                                <th>文件名</th>
+                                <th>Ref</th>
+                                <th>类型</th>
+                                <th>材料名称</th>
+                                <th>匹配材料</th>
+                                <th>置信度</th>
+                                <th>数量</th>
+                                <th>单位</th>
+                                <th>调整数量</th>
+                                <th>排放因子</th>
+                                <th>因子单位</th>
+                                <th>材料类别</th>
+                                <th>排放量 (kgCO2e)</th>
+                                <th>推理过程</th>
+                                <th>单位转换</th>
+                                <th>转换倍数</th>
+                                <th>转换方法</th>
+                                <th>转换步骤</th>
+                                <th>错误信息</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detailsTableBody">
+                        </tbody>
+                    </table>
+                </div>
+                <div class="table-pagination">
+                    <button class="pagination-btn" id="prevBtn" onclick="changePage(-1)">上一页</button>
+                    <span class="pagination-info" id="pageInfo">第 1 页，共 1 页</span>
+                    <button class="pagination-btn" id="nextBtn" onclick="changePage(1)">下一页</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allData = [];
+        let charts = {};
+        let filteredData = [];
+        let currentPage = 1;
+        let pageSize = 25;
+
+        // 调试日志函数
+        function debugLog(message) {
+            const debugLogElement = document.getElementById('debugLog');
+            const timestamp = new Date().toLocaleTimeString();
+            debugLogElement.textContent += `[${timestamp}] ${message}\n`;
+            debugLogElement.scrollTop = debugLogElement.scrollHeight;
+            console.log(`[DEBUG] ${message}`);
+        }
+
+        function clearDebugLog() {
+            document.getElementById('debugLog').textContent = '日志已清除\n';
+        }
+
+        // 测试文件输入功能
+        function testFileInput() {
+            debugLog('测试文件输入功能...');
+            const fileInput = document.getElementById('fileInput');
+            
+            if (!fileInput) {
+                debugLog('错误: 找不到文件输入元素');
+                return;
+            }
+            
+            debugLog('文件输入元素找到: ' + fileInput.id);
+            debugLog('Accept 属性: ' + fileInput.accept);
+            debugLog('Multiple 属性: ' + fileInput.multiple);
+            
+            // 检查事件监听器
+            debugLog('检查事件监听器...');
+            fileInput.click(); // 尝试触发文件选择
+        }
+
+        // 加载测试数据
+        function loadTestData() {
+            debugLog('加载测试数据...');
+            
+            const testData = {
+                "total_emissions": 1500000,
+                "details": [
+                    {
+                        "material_index": 0,
+                        "ref": 23.0,
+                        "type": "Concrete",
+                        "material": "Concrete Grade 20P/20",
+                        "matched_material": "Concrete C20, Ordinary Portland Cement",
+                        "confidence": "high",
+                        "reasoning": "Material 0: Exact match for C20 concrete in Hong Kong",
+                        "quantity": 141.0,
+                        "input_unit": "Cube",
+                        "adjusted_quantity": 141.0,
+                        "unit_conversion_needed": false,
+                        "conversion_multiplier": 1.0,
+                        "conversion_method": "No conversion needed",
+                        "conversion_steps": "N/A",
+                        "factor": 309.75,
+                        "factor_unit": "kgCO2e/m3",
+                        "material_category": "concrete",
+                        "emissions": 43674.75,
+                        "error": ""
+                    },
+                    {
+                        "material_index": 1,
+                        "ref": 24.0,
+                        "type": "Steel",
+                        "material": "Steel Rebar Grade 460",
+                        "matched_material": "Steel Reinforcement Bar",
+                        "confidence": "high",
+                        "reasoning": "Material 1: Standard steel rebar",
+                        "quantity": 50.5,
+                        "input_unit": "Ton",
+                        "adjusted_quantity": 50.5,
+                        "unit_conversion_needed": false,
+                        "conversion_multiplier": 1.0,
+                        "conversion_method": "No conversion needed",
+                        "conversion_steps": "N/A",
+                        "factor": 2280.0,
+                        "factor_unit": "kgCO2e/Ton",
+                        "material_category": "steel",
+                        "emissions": 115140.0,
+                        "error": ""
+                    }
+                ]
+            };
+            
+            allData = [
+                {
+                    filename: "test_building_1.json",
+                    data: testData
+                },
+                {
+                    filename: "test_building_2.json", 
+                    data: {
+                        "total_emissions": 800000,
+                        "details": [
+                            {
+                                "material_index": 0,
+                                "ref": 1.0,
+                                "type": "Aluminum",
+                                "material": "Aluminum Window Frame",
+                                "matched_material": "Aluminum Alloy",
+                                "confidence": "medium",
+                                "reasoning": "Standard aluminum for windows",
+                                "quantity": 25.3,
+                                "input_unit": "kg",
+                                "adjusted_quantity": 25.3,
+                                "unit_conversion_needed": false,
+                                "conversion_multiplier": 1.0,
+                                "conversion_method": "No conversion needed",
+                                "conversion_steps": "N/A",
+                                "factor": 8900.0,
+                                "factor_unit": "kgCO2e/Ton",
+                                "material_category": "metal",
+                                "emissions": 225170.0,
+                                "error": ""
+                            }
+                        ]
+                    }
+                }
+            ];
+            
+            debugLog(`测试数据已加载: ${allData.length} 个文件`);
+            processAllData();
+        }
+
+        // 处理文件选择
+        function handleFiles(event) {
+            debugLog('handleFiles 函数被调用');
+            const files = event.target.files;
+            const fileStatus = document.getElementById('fileStatus');
+            
+            debugLog(`选择了 ${files.length} 个文件`);
+            
+            if (files.length === 0) {
+                debugLog('没有选择文件');
+                return;
+            }
+            
+            fileStatus.innerHTML = `<p>正在处理 ${files.length} 个文件...</p>`;
+            allData = [];
+            
+            let processedFiles = 0;
+            
+            Array.from(files).forEach((file, index) => {
+                debugLog(`处理文件 ${index + 1}: ${file.name} (大小: ${file.size} 字节)`);
+                
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    try {
+                        debugLog(`文件 ${file.name} 读取完成，开始解析JSON...`);
+                        const data = JSON.parse(e.target.result);
+                        debugLog(`文件 ${file.name} JSON解析成功`);
+                        
+                        allData.push({
+                            filename: file.name,
+                            data: data
+                        });
+                        
+                        processedFiles++;
+                        debugLog(`已处理 ${processedFiles}/${files.length} 个文件`);
+                        
+                        if (processedFiles === files.length) {
+                            debugLog('所有文件处理完成，开始数据处理...');
+                            processAllData();
+                        }
+                    } catch (error) {
+                        debugLog(`文件 ${file.name} JSON解析失败: ${error.message}`);
+                        fileStatus.innerHTML = `<div class="error">文件 ${file.name} 解析失败: ${error.message}</div>`;
+                    }
+                };
+                
+                reader.onerror = function(error) {
+                    debugLog(`文件 ${file.name} 读取失败: ${error}`);
+                    fileStatus.innerHTML = `<div class="error">文件 ${file.name} 读取失败</div>`;
+                };
+                
+                reader.readAsText(file);
+            });
+        }
+
+        // 处理所有数据
+        function processAllData() {
+            debugLog(`processAllData 开始处理 ${allData.length} 个文件的数据`);
+            
+            if (allData.length === 0) {
+                debugLog('没有数据需要处理');
+                return;
+            }
+            
+            try {
+                debugLog('显示内容区域...');
+                document.getElementById('content').style.display = 'block';
+                document.getElementById('fileStatus').innerHTML = `<div class="success">✅ 成功加载 ${allData.length} 个文件</div>`;
+                
+                debugLog('创建统计卡片...');
+                createStatsCards();
+                
+                debugLog('创建图表...');
+                createCharts();
+                
+                debugLog('创建数据表格...');
+                createDataTable();
+                
+                debugLog('初始化筛选器...');
+                initializeFilters();
+                
+                debugLog('加载详细数据...');
+                loadDetailedData();
+                
+                debugLog('所有数据处理完成!');
+            } catch (error) {
+                debugLog(`处理数据时出错: ${error.message}`);
+                console.error('处理数据时出错:', error);
+                document.getElementById('fileStatus').innerHTML = `<div class="error">处理数据时出错: ${error.message}</div>`;
+            }
+        }
+
+        function createStatsCards() {
+            debugLog('创建统计卡片...');
+            const statsGrid = document.getElementById('statsGrid');
+            
+            try {
+                let totalEmissions = 0;
+                let totalMaterials = 0;
+                let totalFiles = allData.length;
+                let materialTypes = new Set();
+                
+                allData.forEach((fileData, index) => {
+                    debugLog(`处理文件 ${index + 1} 统计: ${fileData.filename}`);
+                    
+                    totalEmissions += fileData.data.total_emissions || 0;
+                    totalMaterials += fileData.data.details ? fileData.data.details.length : 0;
+                    
+                    if (fileData.data.details) {
+                        fileData.data.details.forEach(detail => {
+                            if (detail.type) {
+                                materialTypes.add(detail.type);
+                            }
+                        });
+                    }
+                });
+                
+                debugLog(`统计结果: 总排放=${totalEmissions}, 总材料=${totalMaterials}, 文件数=${totalFiles}, 材料类型数=${materialTypes.size}`);
+                
+                const stats = [
+                    { label: '总碳排放量', value: (totalEmissions / 1000000).toFixed(2), unit: '百万 kgCO2e' },
+                    { label: '文件数量', value: totalFiles, unit: '个' },
+                    { label: '材料项目总数', value: totalMaterials, unit: '项' },
+                    { label: '材料类型', value: materialTypes.size, unit: '种' }
+                ];
+                
+                statsGrid.innerHTML = stats.map(stat => `
+                    <div class="stat-card">
+                        <div class="stat-value">${stat.value}</div>
+                        <div class="stat-label">${stat.label} (${stat.unit})</div>
+                    </div>
+                `).join('');
+                
+                debugLog('统计卡片创建成功');
+            } catch (error) {
+                debugLog(`创建统计卡片时出错: ${error.message}`);
+                statsGrid.innerHTML = `<div class="error">统计卡片创建失败: ${error.message}</div>`;
+            }
+        }
+
+        function createCharts() {
+            debugLog('创建图表...');
+            const chartsGrid = document.getElementById('chartsGrid');
+            
+            try {
+                chartsGrid.innerHTML = `
+                    <div class="chart-container">
+                        <div class="chart-title">各文件碳排放量对比</div>
+                        <canvas id="detailedChart"></canvas>
+                    </div>
+                `;
+                
+                createEmissionsChart();
+                createMaterialTypeChart();
+                createDetailedChart();
+                
+                debugLog('图表创建成功');
+            } catch (error) {
+                debugLog(`创建图表时出错: ${error.message}`);
+                chartsGrid.innerHTML = `<div class="error">图表创建失败: ${error.message}</div>`;
+            }
+        }
+
+        function createEmissionsChart() {
+            try {
+                const ctx = document.getElementById('emissionsChart');
+                if (!ctx) {
+                    debugLog('找不到排放量图表canvas元素');
+                    return;
+                }
+                
+                const labels = allData.map(item => item.filename.replace('.json', ''));
+                const data = allData.map(item => (item.data.total_emissions || 0) / 1000000);
+                
+                if (charts.emissions) charts.emissions.destroy();
+                
+                charts.emissions = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: '碳排放量 (百万 kgCO2e)',
+                            data: data,
+                            backgroundColor: 'rgba(102, 126, 234, 0.8)',
+                            borderColor: 'rgba(102, 126, 234, 1)',
+                            borderWidth: 2,
+                            borderRadius: 8
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.1)'
+                                }
+                            },
+                            x: {
+                                grid: {
+                                    display: false
+                                }
+                            }
+                        }
+                    }
+                });
+                
+                debugLog('排放量对比图表创建成功');
+            } catch (error) {
+                debugLog(`创建排放量图表时出错: ${error.message}`);
+            }
+        }
+
+        function createMaterialTypeChart() {
+            try {
+                const ctx = document.getElementById('materialChart');
+                if (!ctx) {
+                    debugLog('找不到材料类型图表canvas元素');
+                    return;
+                }
+                
+                const materialStats = {};
+                
+                allData.forEach(fileData => {
+                    if (fileData.data.details) {
+                        fileData.data.details.forEach(detail => {
+                            const type = detail.type || '未知';
+                            materialStats[type] = (materialStats[type] || 0) + (detail.emissions || 0);
+                        });
+                    }
+                });
+                
+                const labels = Object.keys(materialStats);
+                const data = Object.values(materialStats).map(val => val / 1000000);
+                
+                const colors = [
+                    '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0',
+                    '#9966FF', '#FF9F40', '#FF6384', '#C9CBCF'
+                ];
+                
+                if (charts.material) charts.material.destroy();
+                
+                charts.material = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: data,
+                            backgroundColor: colors.slice(0, labels.length),
+                            borderWidth: 2,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                position: 'bottom'
+                            }
+                        }
+                    }
+                });
+                
+                debugLog('材料类型分布图表创建成功');
+            } catch (error) {
+                debugLog(`创建材料类型图表时出错: ${error.message}`);
+            }
+        }
+
+        function createDetailedChart() {
+            try {
+                const ctx = document.getElementById('detailedChart');
+                if (!ctx) {
+                    debugLog('找不到详细分析图表canvas元素');
+                    return;
+                }
+                
+                const allDetails = [];
+                allData.forEach(fileData => {
+                    if (fileData.data.details) {
+                        fileData.data.details.forEach(detail => {
+                            allDetails.push({
+                                ...detail,
+                                filename: fileData.filename
+                            });
+                        });
+                    }
+                });
+                
+                allDetails.sort((a, b) => (b.emissions || 0) - (a.emissions || 0));
+                const topDetails = allDetails.slice(0, 20);
+                
+                const labels = topDetails.map(detail => 
+                    `${detail.material || detail.type || '未知'} (${detail.filename})`
+                );
+                const data = topDetails.map(detail => (detail.emissions || 0) / 1000000);
+                
+                if (charts.detailed) charts.detailed.destroy();
+                
+                charts.detailed = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: '碳排放量 (百万 kgCO2e)',
+                            data: data,
+                            backgroundColor: 'rgba(245, 87, 108, 0.8)',
+                            borderColor: 'rgba(245, 87, 108, 1)',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        indexAxis: 'y',
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            x: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+                
+                debugLog('详细材料分析图表创建成功');
+            } catch (error) {
+                debugLog(`创建详细分析图表时出错: ${error.message}`);
+            }
+        }
+
+        function createDataTable() {
+            debugLog('创建数据表格...');
+            const dataTable = document.getElementById('dataTable');
+            
+            try {
+                const materialCategoryStats = {};
+                allData.forEach(fileData => {
+                    if (fileData.data.details) {
+                        fileData.data.details.forEach(detail => {
+                            const category = detail.type || '未知';
+                            if (!materialCategoryStats[category]) {
+                                materialCategoryStats[category] = {
+                                    totalEmissions: 0,
+                                    count: 0,
+                                    totalQuantity: 0
+                                };
+                            }
+                            materialCategoryStats[category].totalEmissions += detail.emissions || 0;
+                            materialCategoryStats[category].count += 1;
+                            materialCategoryStats[category].totalQuantity += detail.adjusted_quantity || detail.quantity || 0;
+                        });
+                    }
+                });
+                
+                const sortedCategories = Object.entries(materialCategoryStats)
+                    .sort(([,a], [,b]) => b.totalEmissions - a.totalEmissions);
+                
+                const summaryData = allData.map(fileData => ({
+                    filename: fileData.filename,
+                    totalEmissions: fileData.data.total_emissions || 0,
+                    materialCount: fileData.data.details ? fileData.data.details.length : 0,
+                    avgEmissions: fileData.data.details ? 
+                        (fileData.data.total_emissions || 0) / fileData.data.details.length : 0
+                }));
+                
+                const grandTotalEmissions = summaryData.reduce((sum, item) => sum + item.totalEmissions, 0);
+                
+                dataTable.innerHTML = `
+                    <div class="chart-title">材料类型碳排放汇总 (按type分类)</div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>材料类型 (type)</th>
+                                    <th>总排放量 (kgCO2e)</th>
+                                    <th>材料项数</th>
+                                    <th>平均排放量 (kgCO2e)</th>
+                                    <th>排放占比</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${sortedCategories.map(([category, stats]) => {
+                                    const totalEmissions = allData.reduce((sum, fileData) => 
+                                        sum + (fileData.data.total_emissions || 0), 0);
+                                    const percentage = ((stats.totalEmissions / totalEmissions) * 100).toFixed(1);
+                                    return `
+                                        <tr>
+                                            <td><strong>${category}</strong></td>
+                                            <td>${stats.totalEmissions.toLocaleString()}</td>
+                                            <td>${stats.count}</td>
+                                            <td>${(stats.totalEmissions / stats.count).toLocaleString()}</td>
+                                            <td>${percentage}%</td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="chart-title" style="margin-top: 40px;">文件详细数据汇总</div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>文件名</th>
+                                    <th>总排放量 (kgCO2e)</th>
+                                    <th>材料项数</th>
+                                    <th>平均排放量 (kgCO2e)</th>
+                                    <th>排放占比</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${summaryData.map(row => {
+                                    const percentage = grandTotalEmissions > 0 ? 
+                                        ((row.totalEmissions / grandTotalEmissions) * 100).toFixed(1) : '0.0';
+                                    return `
+                                        <tr>
+                                            <td>${row.filename}</td>
+                                            <td>${row.totalEmissions.toLocaleString()}</td>
+                                            <td>${row.materialCount}</td>
+                                            <td>${row.avgEmissions.toLocaleString()}</td>
+                                            <td>${percentage}%</td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                
+                debugLog('数据表格创建成功');
+            } catch (error) {
+                debugLog(`创建数据表格时出错: ${error.message}`);
+                dataTable.innerHTML = `<div class="error">数据表格创建失败: ${error.message}</div>`;
+            }
+        }
+
+        function initializeFilters() {
+            debugLog('初始化筛选器...');
+            try {
+                const fileFilter = document.getElementById('fileFilter');
+                const typeFilter = document.getElementById('typeFilter');
+                const categoryFilter = document.getElementById('categoryFilter');
+                
+                const files = new Set();
+                const types = new Set();
+                const categories = new Set();
+                
+                allData.forEach(fileData => {
+                    files.add(fileData.filename);
+                    if (fileData.data.details) {
+                        fileData.data.details.forEach(detail => {
+                            if (detail.type) types.add(detail.type);
+                            if (detail.material_category) categories.add(detail.material_category);
+                        });
+                    }
+                });
+                
+                fileFilter.innerHTML = '<option value="">全部文件</option>' + 
+                    Array.from(files).sort().map(file => 
+                        `<option value="${file}">${file}</option>`
+                    ).join('');
+                
+                typeFilter.innerHTML = '<option value="">全部类型</option>' + 
+                    Array.from(types).sort().map(type => 
+                        `<option value="${type}">${type}</option>`
+                    ).join('');
+                
+                categoryFilter.innerHTML = '<option value="">全部类别</option>' + 
+                    Array.from(categories).sort().map(category => 
+                        `<option value="${category}">${category}</option>`
+                    ).join('');
+                
+                debugLog('筛选器初始化成功');
+            } catch (error) {
+                debugLog(`初始化筛选器时出错: ${error.message}`);
+            }
+        }
+
+        function loadDetailedData() {
+            debugLog('加载详细数据...');
+            try {
+                const allDetails = [];
+                allData.forEach(fileData => {
+                    if (fileData.data.details) {
+                        fileData.data.details.forEach((detail, index) => {
+                            allDetails.push({
+                                ...detail,
+                                filename: fileData.filename,
+                                material_index: detail.material_index || index
+                            });
+                        });
+                    }
+                });
+                
+                filteredData = allDetails;
+                currentPage = 1;
+                renderDetailedTable();
+                
+                debugLog(`详细数据加载成功: ${allDetails.length} 条记录`);
+            } catch (error) {
+                debugLog(`加载详细数据时出错: ${error.message}`);
+            }
+        }
+
+        function applyFilters() {
+            debugLog('应用筛选条件...');
+            try {
+                const fileFilter = document.getElementById('fileFilter').value;
+                const typeFilter = document.getElementById('typeFilter').value;
+                const materialFilter = document.getElementById('materialFilter').value.toLowerCase();
+                const minEmissions = parseFloat(document.getElementById('minEmissionsFilter').value) || 0;
+                const maxEmissions = parseFloat(document.getElementById('maxEmissionsFilter').value) || Infinity;
+                const categoryFilter = document.getElementById('categoryFilter').value;
+                
+                const allDetails = [];
+                allData.forEach(fileData => {
+                    if (fileData.data.details) {
+                        fileData.data.details.forEach((detail, index) => {
+                            allDetails.push({
+                                ...detail,
+                                filename: fileData.filename,
+                                material_index: detail.material_index || index
+                            });
+                        });
+                    }
+                });
+                
+                filteredData = allDetails.filter(detail => {
+                    return (
+                        (!fileFilter || detail.filename === fileFilter) &&
+                        (!typeFilter || detail.type === typeFilter) &&
+                        (!materialFilter || (detail.material || '').toLowerCase().includes(materialFilter)) &&
+                        (detail.emissions || 0) >= minEmissions &&
+                        (detail.emissions || 0) <= maxEmissions &&
+                        (!categoryFilter || detail.material_category === categoryFilter)
+                    );
+                });
+                
+                currentPage = 1;
+                renderDetailedTable();
+                
+                debugLog(`筛选完成: ${filteredData.length} 条记录符合条件`);
+            } catch (error) {
+                debugLog(`应用筛选时出错: ${error.message}`);
+            }
+        }
+
+        function clearFilters() {
+            debugLog('清除筛选条件...');
+            try {
+                document.getElementById('fileFilter').value = '';
+                document.getElementById('typeFilter').value = '';
+                document.getElementById('materialFilter').value = '';
+                document.getElementById('minEmissionsFilter').value = '';
+                document.getElementById('maxEmissionsFilter').value = '';
+                document.getElementById('categoryFilter').value = '';
+                
+                loadDetailedData();
+                debugLog('筛选条件已清除');
+            } catch (error) {
+                debugLog(`清除筛选时出错: ${error.message}`);
+            }
+        }
+
+        function renderDetailedTable() {
+            try {
+                const tbody = document.getElementById('detailsTableBody');
+                const recordCount = document.getElementById('recordCount');
+                const pageInfo = document.getElementById('pageInfo');
+                
+                const totalPages = Math.ceil(filteredData.length / pageSize);
+                const startIndex = (currentPage - 1) * pageSize;
+                const endIndex = Math.min(startIndex + pageSize, filteredData.length);
+                const currentData = filteredData.slice(startIndex, endIndex);
+                
+                recordCount.textContent = `共 ${filteredData.length} 条记录`;
+                pageInfo.textContent = `第 ${currentPage} 页，共 ${totalPages} 页`;
+                
+                document.getElementById('prevBtn').disabled = currentPage <= 1;
+                document.getElementById('nextBtn').disabled = currentPage >= totalPages;
+                
+                tbody.innerHTML = currentData.map(detail => `
+                    <tr>
+                        <td title="${detail.filename}">${detail.filename}</td>
+                        <td>${detail.ref || ''}</td>
+                        <td>${detail.type || ''}</td>
+                        <td title="${detail.material || ''}">${detail.material || ''}</td>
+                        <td title="${detail.matched_material || ''}">${detail.matched_material || ''}</td>
+                        <td>${detail.confidence || ''}</td>
+                        <td>${detail.quantity || ''}</td>
+                        <td>${detail.input_unit || ''}</td>
+                        <td>${detail.adjusted_quantity || ''}</td>
+                        <td>${detail.factor || ''}</td>
+                        <td>${detail.factor_unit || ''}</td>
+                        <td>${detail.material_category || ''}</td>
+                        <td>${(detail.emissions || 0).toLocaleString()}</td>
+                        <td title="${detail.reasoning || ''}" style="max-width: 150px;">${detail.reasoning || ''}</td>
+                        <td>${detail.unit_conversion_needed ? '是' : '否'}</td>
+                        <td>${detail.conversion_multiplier || ''}</td>
+                        <td title="${detail.conversion_method || ''}">${detail.conversion_method || ''}</td>
+                        <td title="${detail.conversion_steps || ''}" style="max-width: 100px;">${detail.conversion_steps || ''}</td>
+                        <td title="${detail.error || ''}">${detail.error || ''}</td>
+                    </tr>
+                `).join('');
+                
+                debugLog(`详细表格渲染成功: 显示第 ${currentPage} 页，${currentData.length} 条记录`);
+            } catch (error) {
+                debugLog(`渲染详细表格时出错: ${error.message}`);
+            }
+        }
+
+        function changePageSize() {
+            pageSize = parseInt(document.getElementById('pageSize').value);
+            currentPage = 1;
+            renderDetailedTable();
+            debugLog(`页面大小改变为: ${pageSize}`);
+        }
+
+        function changePage(direction) {
+            const totalPages = Math.ceil(filteredData.length / pageSize);
+            currentPage += direction;
+            currentPage = Math.max(1, Math.min(currentPage, totalPages));
+            renderDetailedTable();
+            debugLog(`翻页到第 ${currentPage} 页`);
+        }
+        
+        function exportToExcel() {
+            debugLog('开始导出Excel...');
+            if (allData.length === 0) {
+                alert('请先上传JSON文件');
+                return;
+            }
+            
+            try {
+                const allDetails = [];
+                
+                allData.forEach(fileData => {
+                    if (fileData.data.details) {
+                        fileData.data.details.forEach(detail => {
+                            allDetails.push({
+                                '文件名': fileData.filename,
+                                '总排放量': fileData.data.total_emissions || 0,
+                                'material_index': detail.material_index || '',
+                                'ref': detail.ref || '',
+                                'type': detail.type || '',
+                                'material': detail.material || '',
+                                'matched_material': detail.matched_material || '',
+                                'confidence': detail.confidence || '',
+                                'reasoning': detail.reasoning || '',
+                                'quantity': detail.quantity || '',
+                                'input_unit': detail.input_unit || '',
+                                'adjusted_quantity': detail.adjusted_quantity || '',
+                                'unit_conversion_needed': detail.unit_conversion_needed || '',
+                                'conversion_multiplier': detail.conversion_multiplier || '',
+                                'conversion_method': detail.conversion_method || '',
+                                'conversion_steps': detail.conversion_steps || '',
+                                'factor': detail.factor || '',
+                                'factor_unit': detail.factor_unit || '',
+                                'material_category': detail.material_category || '',
+                                'emissions': detail.emissions || '',
+                                'error': detail.error || ''
+                            });
+                        });
+                    }
+                });
+                
+                const wb = XLSX.utils.book_new();
+                const ws1 = XLSX.utils.json_to_sheet(allDetails);
+                
+                const colWidths = [
+                    {wch: 15}, {wch: 15}, {wch: 12}, {wch: 8}, {wch: 12}, {wch: 30}, {wch: 35}, {wch: 10}, {wch: 50}, {wch: 10},
+                    {wch: 12}, {wch: 15}, {wch: 18}, {wch: 18}, {wch: 25}, {wch: 60}, {wch: 10}, {wch: 15}, {wch: 18}, {wch: 15}, {wch: 10}
+                ];
+                ws1['!cols'] = colWidths;
+                
+                XLSX.utils.book_append_sheet(wb, ws1, "详细数据");
+                
+                const now = new Date();
+                const timestamp = now.toISOString().slice(0, 19).replace(/:/g, '-');
+                const filename = `碳排放数据分析_${timestamp}.xlsx`;
+                
+                XLSX.writeFile(wb, filename);
+                
+                debugLog(`Excel文件导出成功: ${filename}`);
+                alert(`Excel文件已生成并下载：${filename}`);
+            } catch (error) {
+                debugLog(`导出Excel时出错: ${error.message}`);
+                alert('导出失败，请查看调试日志');
+            }
+        }
+
+        // 页面加载完成后初始化
+        window.addEventListener('DOMContentLoaded', function() {
+            debugLog('页面加载完成，初始化应用...');
+            
+            const fileInput = document.getElementById('fileInput');
+            if (fileInput) {
+                fileInput.addEventListener('change', handleFiles);
+                debugLog('文件输入监听器已添加');
+            } else {
+                debugLog('错误: 找不到文件输入元素');
+            }
+            
+            debugLog('应用初始化完成');
+        });
+    </script>
+</body>
+</html> id="emissionsChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-title">材料类型分布</div>
+                        <canvas id="materialChart"></canvas>
+                    </div>
+                    <div class="chart-container full-width">
+                        <div class="chart-title">详细材料碳排放分析</div>
+                        <canvas></canvas>
